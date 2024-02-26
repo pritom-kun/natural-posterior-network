@@ -21,11 +21,11 @@ class NaturalPosteriorNetworkOodTestingLightningModule(pl.LightningModule):
         self.model = model
         self.logging_key = logging_key
 
-        self.alea_conf_pr = AUCPR(compute_on_step=False, dist_sync_fn=self.all_gather)
-        self.alea_conf_roc = AUROC(compute_on_step=False, dist_sync_fn=self.all_gather)
+        self.alea_conf_pr = AUCPR(dist_sync_fn=self.all_gather)
+        self.alea_conf_roc = AUROC(task="binary", dist_sync_fn=self.all_gather)
 
-        self.epist_conf_pr = AUCPR(compute_on_step=False, dist_sync_fn=self.all_gather)
-        self.epist_conf_roc = AUROC(compute_on_step=False, dist_sync_fn=self.all_gather)
+        self.epist_conf_pr = AUCPR(dist_sync_fn=self.all_gather)
+        self.epist_conf_roc = AUROC(task="binary", dist_sync_fn=self.all_gather)
 
     def test_step(self, batch: Batch, _batch_idx: int) -> None:
         X, y = batch

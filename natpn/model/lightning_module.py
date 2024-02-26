@@ -46,8 +46,10 @@ class NaturalPosteriorNetworkLightningModule(pl.LightningModule):
         if isinstance(model.output, CategoricalOutput):
             # We have discrete output
             self.output = "discrete"
-            self.accuracy = Accuracy(compute_on_step=False, dist_sync_fn=self.all_gather)
-            self.brier_score = BrierScore(compute_on_step=False, dist_sync_fn=self.all_gather)
+            self.accuracy = Accuracy(task="multiclass",
+                                     num_classes=model.output.linear.out_features,
+                                     dist_sync_fn=self.all_gather)
+            self.brier_score = BrierScore(dist_sync_fn=self.all_gather)
         else:
             # We have continuous output
             self.output = "continuous"

@@ -1,0 +1,15 @@
+Pillow
+click
+lightkit
+lmdb
+matplotlib
+opencv-python
+openpyxl
+pandas
+pytorch-lightning
+scipy
+torch
+torchmetrics
+torchvision
+wandb
+xlrd

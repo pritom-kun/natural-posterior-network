@@ -11,8 +11,8 @@ class BrierScore(torchmetrics.Metric):
     norm_sum: torch.Tensor
     norm_count: torch.Tensor
 
-    def __init__(self, compute_on_step: bool = True, dist_sync_fn: Any = None):
-        super().__init__(compute_on_step=compute_on_step, dist_sync_fn=dist_sync_fn)
+    def __init__(self, dist_sync_fn: Any = None):
+        super().__init__(dist_sync_fn=dist_sync_fn)
 
         self.add_state("norm_sum", torch.zeros(1), dist_reduce_fx="sum")
         self.add_state("norm_count", torch.zeros(1), dist_reduce_fx="sum")

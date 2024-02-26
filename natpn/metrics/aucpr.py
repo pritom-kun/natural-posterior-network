@@ -2,6 +2,7 @@ from typing import Any, cast, List
 import torch
 import torchmetrics
 import torchmetrics.functional as M
+from torchmetrics.utilities.compute import auc
 
 
 class AUCPR(torchmetrics.Metric):
@@ -12,8 +13,8 @@ class AUCPR(torchmetrics.Metric):
     values: List[torch.Tensor]
     targets: List[torch.Tensor]
 
-    def __init__(self, compute_on_step: bool = True, dist_sync_fn: Any = None):
-        super().__init__(compute_on_step=compute_on_step, dist_sync_fn=dist_sync_fn)
+    def __init__(self, dist_sync_fn: Any = None):
+        super().__init__(dist_sync_fn=dist_sync_fn)
 
         self.add_state("values", [], dist_reduce_fx="cat")
         self.add_state("targets", [], dist_reduce_fx="cat")
@@ -24,6 +25,6 @@ class AUCPR(torchmetrics.Metric):
 
     def compute(self) -> torch.Tensor:
         precision, recall, _ = M.precision_recall_curve(
-            torch.cat(self.values), torch.cat(self.targets), pos_label=1
+            torch.cat(self.values), torch.cat(self.targets), task="binary"
         )
-        return M.auc(cast(torch.Tensor, recall), cast(torch.Tensor, precision), reorder=True)
+        return auc(cast(torch.Tensor, recall), cast(torch.Tensor, precision), reorder=True)
