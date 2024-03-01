@@ -8,7 +8,7 @@ from typing import cast, Dict, Optional
 import argparse
 import pytorch_lightning as pl
 import torch
-from lightkit.utils import PathType
+# from lightkit.utils import PathType
 from pytorch_lightning.loggers import WandbLogger
 from wandb.wandb_run import Run
 from natpn import NaturalPosteriorNetwork, suppress_pytorch_lightning_logs
@@ -21,8 +21,8 @@ logger = logging.getLogger("natpn")
 def main(
     dataset: str,
     seed: Optional[int],
-    data_path: PathType,
-    output_path: Optional[PathType],
+    data_path,
+    output_path,
     experiment: Optional[str],
     latent_dim: int,
     flow_type: FlowType,
@@ -106,14 +106,15 @@ def main(
         finetune=run_finetuning,
         ensemble_size=ensemble_size,
         trainer_params=dict(
-        max_epochs=max_epochs,
-        logger=remote_logger,
-        gpus=int(torch.cuda.is_available() and dataset not in cpu_datasets),
-        ),
+            max_epochs=max_epochs,
+            logger=remote_logger,
+            accelerator='gpu' if dataset not in cpu_datasets else 'cpu',
+        )
     )
 
     # Run training
     estimator.fit(dm)
+    # estimator.load_attributes(Path('saved_models/natpn'))
 
     # Evaluate model
     scores = estimator.score(dm)
@@ -160,13 +161,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data_path",
         # type=str,
-        default=Path.home() / "opt" / "data" / "natpn",
+        default="./opt/data/natpn/",
         help="The directory where input data is stored.",
     )
     parser.add_argument(
         "--output_path",
-        type=str,
-        default=None,
+        # type=str,
+        default="./saved_models/natpn/",
         help="The local directory where the final model should be stored. Only uploaded "
         "or discarded if not provided.",
     )
@@ -218,7 +219,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--max_epochs",
-        default=10,
+        default=200,
         help="The maximum number of epochs to run both training and fine-tuning for.",
     )
     parser.add_argument(

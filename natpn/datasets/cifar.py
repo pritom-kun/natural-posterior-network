@@ -6,8 +6,9 @@ from typing import Any, Dict, Optional
 import torch
 import torchvision.datasets as tvd  # type: ignore
 import torchvision.transforms as T  # type: ignore
-from lightkit.data import DataLoader
-from lightkit.utils import PathType
+from torch.utils.data import DataLoader
+# from lightkit.data import DataLoader
+# from lightkit.utils import PathType
 from pytorch_lightning.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADERS
 from ._base import DataModule, OutputType
 from ._registry import register
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class _CifarDataModule(DataModule, ABC):
-    def __init__(self, root: Optional[PathType] = None, seed: Optional[int] = None):
+    def __init__(self, root = None, seed: Optional[int] = None):
         """
         Args:
             root: The directory where the dataset can be found or where it should be downloaded to.
@@ -43,17 +44,19 @@ class _CifarDataModule(DataModule, ABC):
     def prepare_data(self) -> None:
         logger.info("Preparing 'SVHN'...")
         tvd.SVHN(str(self.root / "svhn"), split="test", download=True)
-        try:
-            logger.info("Preparing 'CelebA'...")
-            tvd.CelebA(str(self.root / "celeba"), split="test", download=True)
-        except zipfile.BadZipFile:
-            logger.error(
-                "Downloading 'CelebA' failed due to download restrictions on Google Drive. "
-                "Please download manually from https://drive.google.com/drive/folders/"
-                "0B7EVK8r0v71pWEZsZE9oNnFzTm8 and put the files into '%s'.",
-                self.root / "celeba",
-            )
-            sys.exit(1)
+        logger.info("Preparing 'CIFAR100'...")
+        tvd.CIFAR100(str(self.root / "cifar100"), train=False, download=True)
+        # try:
+        #     logger.info("Preparing 'CelebA'...")
+        #     tvd.CelebA(str(self.root / "celeba"), split="test", download=True)
+        # except zipfile.BadZipFile:
+        #     logger.error(
+        #         "Downloading 'CelebA' failed due to download restrictions on Google Drive. "
+        #         "Please download manually from https://drive.google.com/drive/folders/"
+        #         "0B7EVK8r0v71pWEZsZE9oNnFzTm8 and put the files into '%s'.",
+        #         self.root / "celeba",
+        #     )
+        #     sys.exit(1)
 
     def setup(self, stage: Optional[str] = None) -> None:
         if stage == "test" and not self.did_setup_ood:
@@ -66,16 +69,6 @@ class _CifarDataModule(DataModule, ABC):
                         transform=T.Compose([T.ToTensor(), self._input_normalizer]),
                     ),
                 ),
-                "celeba": OodDataset(
-                    self.test_dataset,
-                    tvd.CelebA(
-                        str(self.root / "celeba"),
-                        split="test",
-                        transform=T.Compose(
-                            [T.Resize([32, 32]), T.ToTensor(), self._input_normalizer]
-                        ),
-                    ),
-                ),
                 "svhn_oodom": OodDataset(
                     self.test_dataset,
                     tvd.SVHN(
@@ -86,6 +79,34 @@ class _CifarDataModule(DataModule, ABC):
                         ),
                     ),
                 ),
+                "cifar100": OodDataset(
+                    self.test_dataset,
+                    tvd.CIFAR100(
+                        str(self.root / "cifar100"),
+                        train=False,
+                        transform=T.Compose([T.ToTensor(), self._input_normalizer]),
+                    ),
+                ),
+                "cifar100_oodom": OodDataset(
+                    self.test_dataset,
+                    tvd.CIFAR100(
+                        str(self.root / "cifar100"),
+                        train=False,
+                        transform=T.Compose(
+                            [T.ToTensor(), T.Lambda(scale_oodom), self._input_normalizer]
+                        ),
+                    ),
+                ),
+                # "celeba": OodDataset(
+                #     self.test_dataset,
+                #     tvd.CelebA(
+                #         str(self.root / "celeba"),
+                #         split="test",
+                #         transform=T.Compose(
+                #             [T.Resize([32, 32]), T.ToTensor(), self._input_normalizer]
+                #         ),
+                #     ),
+                # ),
             }
 
             # Mark done

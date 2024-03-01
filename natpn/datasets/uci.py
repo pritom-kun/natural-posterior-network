@@ -2,10 +2,10 @@ import logging
 from typing import Any, Dict, Optional
 import pandas as pd
 import torch
-from lightkit.data import DataLoader
-from lightkit.utils import PathType
+# from lightkit.data import DataLoader
+# from lightkit.utils import PathType
 from pytorch_lightning.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADERS
-from torch.utils.data import TensorDataset
+from torch.utils.data import TensorDataset, DataLoader
 from torchvision.datasets.utils import download_url  # type: ignore
 from ._base import DataModule, OutputType
 from ._registry import register
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class _UciDataModule(DataModule):
-    def __init__(self, root: Optional[PathType] = None, seed: Optional[int] = None):
+    def __init__(self, root = None, seed: Optional[int] = None):
         """
         Args:
             root: The directory where the dataset can be found or where it should be downloaded to.

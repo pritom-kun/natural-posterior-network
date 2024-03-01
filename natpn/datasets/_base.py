@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Dict, Literal, Optional
 import pytorch_lightning as pl
 import torch
-from lightkit.utils import PathType
+# from lightkit.utils import PathType
 from torch.utils.data import DataLoader, Dataset
 from ._utils import IdentityScaler
 
@@ -23,7 +23,7 @@ class DataModule(pl.LightningDataModule, ABC):
     val_dataset: Dataset[Any]
     test_dataset: Dataset[Any]
 
-    def __init__(self, root: Optional[PathType] = None, seed: Optional[int] = None):
+    def __init__(self, root = None, seed: Optional[int] = None):
         super().__init__()
         self.root = Path(root or DEFAULT_ROOT)
         self.output_scaler = IdentityScaler()

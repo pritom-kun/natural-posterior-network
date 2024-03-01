@@ -7,7 +7,7 @@ from typing import cast, Dict, Optional
 import click
 import pytorch_lightning as pl
 import torch
-from lightkit.utils import PathType
+# from lightkit.utils import PathType
 from pytorch_lightning.loggers import WandbLogger
 from wandb.wandb_run import Run
 from natpn import NaturalPosteriorNetwork, suppress_pytorch_lightning_logs
@@ -130,8 +130,8 @@ logger = logging.getLogger(__name__)
 def main(
     dataset: str,
     seed: Optional[int],
-    data_path: PathType,
-    output_path: Optional[PathType],
+    data_path,
+    output_path,
     experiment: Optional[str],
     latent_dim: int,
     flow_type: FlowType,

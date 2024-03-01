@@ -5,6 +5,7 @@ import torch
 from pytorch_lightning.callbacks import EarlyStopping
 from torch import optim
 from torchmetrics import Accuracy, MeanSquaredError
+from torchmetrics.classification import MulticlassCalibrationError
 import natpn.distributions as D
 from natpn.datasets import DataModule
 from natpn.metrics import BrierScore, QuantileCalibrationScore
@@ -46,10 +47,17 @@ class NaturalPosteriorNetworkLightningModule(pl.LightningModule):
         if isinstance(model.output, CategoricalOutput):
             # We have discrete output
             self.output = "discrete"
-            self.accuracy = Accuracy(task="multiclass",
-                                     num_classes=model.output.linear.out_features,
-                                     dist_sync_fn=self.all_gather)
+            self.accuracy = Accuracy(
+                task="multiclass",
+                num_classes=model.output.linear.out_features,
+                dist_sync_fn=self.all_gather
+            )
             self.brier_score = BrierScore(dist_sync_fn=self.all_gather)
+            self.ece = MulticlassCalibrationError(
+                num_classes=model.output.linear.out_features,
+                n_bins=10,
+                norm="l1"
+            )
         else:
             # We have continuous output
             self.output = "continuous"
@@ -111,6 +119,9 @@ class NaturalPosteriorNetworkLightningModule(pl.LightningModule):
             probs = y_pred.maximum_a_posteriori().expected_sufficient_statistics()
             self.brier_score.update(probs, y_true)
             self.log(f"{prefix}/brier_score", self.brier_score, prog_bar=True)
+
+            self.ece.update(probs, y_true)
+            self.log(f"{prefix}/ece", self.ece, prog_bar=True)
         else:
             dm = cast(DataModule, self.trainer.datamodule)
             predicted = y_pred.maximum_a_posteriori().mean()

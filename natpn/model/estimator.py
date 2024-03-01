@@ -1,11 +1,16 @@
 from __future__ import annotations
 import json
+import warnings
+import pickle
+import inspect
 import logging
 import tempfile
+from abc import ABC
 from pathlib import Path
 from typing import Any, cast, Dict, List, Literal, Optional, Union
 import torch
-from lightkit import BaseEstimator
+# from lightkit import BaseEstimator
+import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 from natpn.datasets import DataModule, OutputType
 from natpn.nn import CertaintyBudget, NaturalPosteriorEnsembleModel, NaturalPosteriorNetworkModel
@@ -44,7 +49,7 @@ A reference to an encoder class that can be used with :class:`NaturalPosteriorNe
 """
 
 
-class NaturalPosteriorNetwork(BaseEstimator):
+class NaturalPosteriorNetwork(ABC):
     """
     Estimator for the Natural Posterior Network and the Natural Posterior Ensemble.
     """
@@ -73,6 +78,9 @@ class NaturalPosteriorNetwork(BaseEstimator):
         warmup_epochs: int = 3,
         finetune: bool = True,
         ensemble_size: Optional[int] = None,
+        # max_epochs: int = 10,
+        # accelerator: str = 'auto',
+        # logger = None
         trainer_params: Optional[Dict[str, Any]] = None,
     ):
         """
@@ -106,14 +114,35 @@ class NaturalPosteriorNetwork(BaseEstimator):
             trainer_params: Additional parameters which are passed to the PyTorch Ligthning
                 trainer. These parameters apply to all fitting runs as well as testing.
         """
-        super().__init__(
-            user_params=trainer_params,
-            overwrite_params=dict(
-                log_every_n_steps=1,
-                enable_checkpointing=True,
-                enable_progress_bar=True,
-            ),
+        # super().__init__()
+
+        # self.max_epochs = max_epochs
+        # self.logger = logger
+        # self.accelerator = accelerator
+
+        # self.user_params = dict(
+        #     max_epochs=self.max_epochs,
+        #     accelerator=self.accelerator,
+        #     logger=self.logger
+        # )
+        self.overwrite_params = dict(
+            log_every_n_steps=1,
+            enable_checkpointing=True,
+            enable_progress_bar=True,
+            devices=[0]
         )
+
+        self.trainer_params = {
+            **dict(
+                logger=False,
+                log_every_n_steps=1,
+                enable_progress_bar=logger.getEffectiveLevel() <= logging.INFO,
+                enable_checkpointing=logger.getEffectiveLevel() <= logging.DEBUG,
+                enable_model_summary=logger.getEffectiveLevel() <= logging.DEBUG,
+            ),
+            **(trainer_params or {}),
+            **(self.overwrite_params or {}),
+        }
 
         self.latent_dim = latent_dim
         self.encoder = encoder
@@ -130,6 +159,25 @@ class NaturalPosteriorNetwork(BaseEstimator):
 
     # ---------------------------------------------------------------------------------------------
     # RUNNING THE MODEL
+    def trainer(self, **kwargs: Any) -> pl.Trainer:
+        """
+        Returns the trainer as configured by the estimator. Typically, this method is only called
+        by functions in the estimator.
+
+        Args:
+            kwargs: Additional arguments that override the trainer arguments registered in the
+                initializer of the estimator.
+
+        Returns:
+            A fully initialized PyTorch Lightning trainer.
+
+        Note:
+            This function should be preferred over initializing the trainer directly. It ensures
+            that the returned trainer correctly deals with LightKit components that may be
+            introduced in the future.
+        """
+        return pl.Trainer(**{**self.trainer_params, **kwargs})
+
 
     def fit(self, data: DataModule) -> NaturalPosteriorNetwork:
         """
@@ -222,6 +270,49 @@ class NaturalPosteriorNetwork(BaseEstimator):
     def persistent_attributes(self) -> List[str]:
         return [k for k in self.__annotations__ if k != "model_"]
 
+    def save(self, path) -> None:
+        """Saves the estimator to the provided directory. It saves a file named
+        ``estimator.pickle`` for the configuration of the estimator and
+        additional files for the fitted model (if applicable). For more
+        information on the files saved for the fitted model or for more
+        customization, look at :meth:`get_params` and
+        :meth:`lightkit.nn.Configurable.save`.
+
+        Args:
+            path: The directory to which all files should be saved.
+
+        Note:
+            This method may be called regardless of whether the estimator has already been fitted.
+
+        Attention:
+            If the dictionary returned by :meth:`get_params` is not JSON-serializable, this method
+            uses :mod:`pickle` which is not necessarily backwards-compatible.
+        """
+        path = Path(path)
+        assert not path.exists() or path.is_dir(), "Estimators can only be saved to a directory."
+
+        path.mkdir(parents=True, exist_ok=True)
+        self.save_parameters(path)
+        try:
+            self.save_attributes(path)
+        except:
+            # In case attributes are not fitted, we just don't save them
+            pass
+    
+    def get_params(self, deep: bool = True) -> dict[str, Any]:  # pylint: disable=unused-argument
+        """
+        Returns the estimator's parameters as passed to the initializer.
+
+        Args:
+            deep: Ignored. For Scikit-learn compatibility.
+
+        Returns:
+            The mapping from init parameters to values.
+        """
+        signature = inspect.signature(self.__class__.__init__)
+        parameters = [p.name for p in signature.parameters.values() if p.name != "self"]
+        return {p: getattr(self, p) for p in parameters}
+
     def save_parameters(self, path: Path) -> None:
         params = {
             k: (
@@ -236,11 +327,60 @@ class NaturalPosteriorNetwork(BaseEstimator):
             f.write(data)
 
     def save_attributes(self, path: Path) -> None:
-        super().save_attributes(path)
+        """
+        Saves the fitted attributes of this estimator. By default, it uses JSON and falls back to
+        :mod:`pickle`. Subclasses should overwrite this method if non-primitive attributes are
+        fitted.
+
+        Typically, this method should not be called directly. It is called as part of :meth:`save`.
+
+        Args:
+            path: The directory to which the fitted attributed should be saved.
+
+        Raises:
+            NotFittedError: If the estimator has not been fitted.
+        """
+        if len(self.persistent_attributes) == 0:
+            return
+
+        attributes = {
+            attribute: getattr(self, attribute) for attribute in self.persistent_attributes
+        }
+        try:
+            data = json.dumps(attributes, indent=4)
+            with (path / "attributes.json").open("w+") as f:
+                f.write(data)
+        except TypeError:
+            warnings.warn(
+                f"Failed to serialize fitted attributes of `{self.__class__.__name__}` to JSON. "
+                "Falling back to `pickle`."
+            )
+            with (path / "attributes.pickle").open("wb+") as f:
+                pickle.dump(attributes, f)
         torch.save(self.model_.state_dict(), path / "parameters.pt")
 
     def load_attributes(self, path: Path) -> None:
-        super().load_attributes(path)
+        """
+        Loads the fitted attributes that are stored at the fitted path. If subclasses overwrite
+        :meth:`save_attributes`, this method should also be overwritten.
+
+        Typically, this method should not be called directly. It is called as part of :meth:`load`.
+
+        Args:
+            path: The directory from which the parameters should be loaded.
+
+        Raises:
+            FileNotFoundError: If the no fitted attributes have been stored.
+        """
+        json_path = path / "attributes.json"
+        pickle_path = path / "attributes.pickle"
+
+        if json_path.exists():
+            with json_path.open() as f:
+                self.set_params(json.load(f))
+        else:
+            with pickle_path.open("rb") as f:
+                self.set_params(pickle.load(f))
         parameters = torch.load(path / "parameters.pt")
         if self.ensemble_size is None:
             model = self._init_model(self.output_type_, self.input_size_, self.num_classes_ or 0)
@@ -255,6 +395,21 @@ class NaturalPosteriorNetwork(BaseEstimator):
             )
             model.load_state_dict(parameters)
             self.model_ = model
+
+    def set_params(self, values: dict[str, Any]):
+        """
+        Sets the provided values on the estimator. The estimator is returned as well, but the
+        estimator on which this function is called is also modified.
+
+        Args:
+            values: The values to set.
+
+        Returns:
+            The estimator where the values have been set.
+        """
+        for key, value in values.items():
+            setattr(self, key, value)
+        return self
 
     # ---------------------------------------------------------------------------------------------
     # UTILS
@@ -274,9 +429,13 @@ class NaturalPosteriorNetwork(BaseEstimator):
             logging.getLogger("pytorch_lightning").setLevel(logging.INFO)
             trainer = self.trainer(
                 accumulate_grad_batches=data.gradient_accumulation_steps,
+                # log_every_n_steps=1,
+                # enable_progress_bar=True,
                 enable_checkpointing=False,
                 enable_model_summary=True,
                 max_epochs=self.warmup_epochs,
+                # accelerator = self.accelerator,
+                # logger=self.logger
             )
             logging.getLogger("pytorch_lightning").setLevel(level)
 
@@ -291,8 +450,14 @@ class NaturalPosteriorNetwork(BaseEstimator):
         )
         trainer = self.trainer(
             accumulate_grad_batches=data.gradient_accumulation_steps,
-            callbacks=[trainer_checkpoint],
+            # log_every_n_steps=1,
+            # enable_progress_bar=True,
+            # enable_checkpointing=True,
             enable_model_summary=self.warmup_epochs == 0,
+            callbacks=[trainer_checkpoint],
+            # max_epochs=self.max_epochs,
+            # accelerator = self.accelerator,
+            # logger=self.logger
         )
         logging.getLogger("pytorch_lightning").setLevel(level)
 
@@ -314,7 +479,13 @@ class NaturalPosteriorNetwork(BaseEstimator):
             finetune_checkpoint = ModelCheckpoint(tmp_dir / "finetuning", monitor="val/log_prob", mode='max')
             trainer = self.trainer(
                 accumulate_grad_batches=data.gradient_accumulation_steps,
+                # log_every_n_steps=1,
+                # enable_progress_bar=True,
+                # enable_checkpointing=True,
                 callbacks=[finetune_checkpoint],
+                # max_epochs=self.max_epochs,
+                # accelerator = self.accelerator,
+                # logger=self.logger
             )
 
             logger.info("Running fine-tuning...")

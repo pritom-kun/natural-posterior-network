@@ -9,12 +9,12 @@ import torch
 import torchvision.datasets as tvd  # type: ignore
 import torchvision.transforms as T  # type: ignore
 import torchvision.transforms.functional as F  # type: ignore
-from lightkit.data import DataLoader
-from lightkit.utils import PathType
+# from lightkit.data import DataLoader
+# from lightkit.utils import PathType
 from PIL import Image
 from PIL.Image import Image as ImageType
 from pytorch_lightning.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADERS
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 from torchvision.datasets.utils import (  # type: ignore
     download_file_from_google_drive,
     download_url,
@@ -32,7 +32,7 @@ class NyuDepthV2DataModule(DataModule):
     Data module for the NYU Depth v2 dataset.
     """
 
-    def __init__(self, root: Optional[PathType] = None, seed: Optional[int] = None):
+    def __init__(self, root = None, seed: Optional[int] = None):
         """
         Args:
             root: The directory where the dataset can be found or where it should be downloaded to.

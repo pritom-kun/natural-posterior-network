@@ -1,14 +1,14 @@
-Pillow
-click
-lightkit
+# click
+# lightkit
+pillow
 lmdb
 matplotlib
 opencv-python
 openpyxl
 pandas
-pytorch-lightning
+pytorch-lightning >= 2.2.0
 scipy
-torch
+torch >= 2.2.1
 torchmetrics
 torchvision
 wandb

@@ -17,3 +17,5 @@ examples/artifacts/
 # Dependencies
 .venv/
 node_modules/
+saved_models/
+opt/

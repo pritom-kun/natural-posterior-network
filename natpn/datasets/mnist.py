@@ -4,10 +4,10 @@ from typing import Any, Dict, Optional
 import torch
 import torchvision.datasets as tvd  # type: ignore
 import torchvision.transforms as T  # type: ignore
-from lightkit.data import DataLoader
-from lightkit.utils import PathType
+# from lightkit.data import DataLoader
+# from lightkit.utils import PathType
 from pytorch_lightning.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADERS
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 from natpn.datasets._utils.ood import OodDataset
 from ._base import DataModule, OutputType
 from ._registry import register
@@ -21,7 +21,7 @@ class _MnistDataModule(DataModule, ABC):
     val_dataset: Dataset[torch.Tensor]
     test_dataset: Dataset[torch.Tensor]
 
-    def __init__(self, root: Optional[PathType] = None, seed: Optional[int] = None):
+    def __init__(self, root = None, seed: Optional[int] = None):
         """
         Args:
             root: The directory where the dataset can be found or where it should be downloaded to.
