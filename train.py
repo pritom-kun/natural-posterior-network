@@ -7,7 +7,6 @@ from typing import cast, Dict, Optional
 # import click
 import argparse
 import pytorch_lightning as pl
-import torch
 # from lightkit.utils import PathType
 from pytorch_lightning.loggers import WandbLogger
 from wandb.wandb_run import Run
@@ -113,8 +112,8 @@ def main(
     )
 
     # Run training
-    estimator.fit(dm)
-    # estimator.load_attributes(Path('saved_models/natpn'))
+    # estimator.fit(dm)
+    estimator.load_attributes(Path('saved_models/natpn'))
 
     # Evaluate model
     scores = estimator.score(dm)

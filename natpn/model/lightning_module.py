@@ -4,8 +4,9 @@ import pytorch_lightning as pl
 import torch
 from pytorch_lightning.callbacks import EarlyStopping
 from torch import optim
-from torchmetrics import Accuracy, MeanSquaredError
+from torchmetrics import Accuracy, MeanSquaredError, AUROC
 from torchmetrics.classification import MulticlassCalibrationError
+from natpn.metrics import AUCPR
 import natpn.distributions as D
 from natpn.datasets import DataModule
 from natpn.metrics import BrierScore, QuantileCalibrationScore
@@ -58,6 +59,8 @@ class NaturalPosteriorNetworkLightningModule(pl.LightningModule):
                 n_bins=10,
                 norm="l1"
             )
+            self.aucpr = AUCPR(dist_sync_fn=self.all_gather)
+            self.auroc = AUROC(task="binary", dist_sync_fn=self.all_gather)
         else:
             # We have continuous output
             self.output = "continuous"
@@ -108,7 +111,7 @@ class NaturalPosteriorNetworkLightningModule(pl.LightningModule):
 
     def test_step(self, batch: Batch, _batch_idx: int) -> None:
         X, y_true = batch
-        y_pred, _ = self.model.forward(X)
+        y_pred, log_prob = self.model.forward(X)
         self._compute_metrics("test", y_pred, y_true)
 
     def _compute_metrics(self, prefix: str, y_pred: D.Posterior, y_true: torch.Tensor) -> None:
@@ -122,6 +125,13 @@ class NaturalPosteriorNetworkLightningModule(pl.LightningModule):
 
             self.ece.update(probs, y_true)
             self.log(f"{prefix}/ece", self.ece, prog_bar=True)
+
+            corrects = ((y_true == y_pred.maximum_a_posteriori().mean())).to(torch.int)
+            self.auroc.update(-y_pred.maximum_a_posteriori().uncertainty(), corrects)
+            self.log(f"{prefix}/auroc", self.auroc, prog_bar=True)
+
+            self.aucpr.update(-y_pred.maximum_a_posteriori().uncertainty(), corrects)
+            self.log(f"{prefix}/aucpr", self.aucpr, prog_bar=True)
         else:
             dm = cast(DataModule, self.trainer.datamodule)
             predicted = y_pred.maximum_a_posteriori().mean()
